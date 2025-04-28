@@ -21,6 +21,10 @@ unsigned char gRXPARAM_snr=0;
 unsigned char gRXPARAM_seq_next=0;
 unsigned int  gRXPARAM_errcnt=0;
 
+uint32_t gSYS_MST_txcnt=0;
+uint32_t gSYS_MST_rxcnt=0;
+uint32_t gSYS_MST_errcnt=0;
+  
 unsigned char master_status=0;
 //0:tx_idle
 //1:tx_busy
