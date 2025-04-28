@@ -140,7 +140,7 @@ int conv_bye2txt(unsigned char bytein,unsigned char *outstr)
   return 2;  
 }
 
-int compose_rsptxt(unsigned char * rawbyte,unsigned char *outstr,int dataset_cnt)
+int compose_rsptxt(unsigned char * rawbyte,unsigned char *outstr,int dataset_cnt,int mode)
 {
   unsigned char uctemp;
   unsigned char uctemp_2b[2];
@@ -153,9 +153,29 @@ int compose_rsptxt(unsigned char * rawbyte,unsigned char *outstr,int dataset_cnt
     conv_bye2txt(uctemp,&uctemp_2b[0]);
     indx = base+0;*(outstr+indx) = uctemp_2b[0];
     indx = base+1;*(outstr+indx) = uctemp_2b[1];
-    
-    indx = base+2;*(outstr+2) = ',';
-    base+=3;
+    if(mode == 0)
+    {
+      if(i == (dataset_cnt-1))
+      {base+=2;}
+      else
+      {
+      indx = base+2;*(outstr+indx) = ',';
+      base+=3;
+      }
+    }
+    else
+    {
+      if(i == (dataset_cnt-1))
+      {
+      }
+      else if((i == 1)||(i == 3)||(i == 5))
+      {
+        indx = base+2;*(outstr+indx) = ',';
+        base+=3;
+      }
+      else
+      {base+=2;}
+    }
   }
 
   //uctemp = *(rawbyte+1);

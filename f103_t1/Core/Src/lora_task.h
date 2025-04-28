@@ -19,5 +19,5 @@ int compose_beacon(unsigned char *buf,uint8_t fcnt,unsigned char seq );
 int send_info_r(unsigned char *buf,unsigned char fcnt,unsigned char sid,unsigned char seq);
 int decode_slvrxdata(unsigned char *rxbuf,int *p_ret,unsigned char *txbuf);
 int conv_bye2txt(unsigned char bytein,unsigned char *outstr);
-int compose_rsptxt(unsigned char * rawbyte,unsigned char *outstr,int);
+int compose_rsptxt(unsigned char * rawbyte,unsigned char *outstr,int,int);
 #endif

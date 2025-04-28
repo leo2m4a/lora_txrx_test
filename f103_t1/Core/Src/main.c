@@ -125,7 +125,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-  master=0;
+  master=1;
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -205,13 +205,16 @@ int main(void)
         else if(gSYS_100ms_cnt == 2)
         {
           //master sending 
+          #if 1
           message_length = send_info_r(&UR3TxBuf[0],gSYS_100ms_cnt,0x81,message);
+          //no need to re-enter tx??
           reti = SX1278_LoRaEntryTx(&SX1278, message_length, 2000);
           //advance 
-          message++;
+          message++;gSYS_MST_txcnt++;
           //UR3TxBuf[0] = message;SendUART3(1);HAL_Delay (5);
           master_status = 1;
           reti = SX1278_LoRaTxPacket(&SX1278, &UR3TxBuf[0],message_length, 2000);                  
+          #endif
         }
         else if(gSYS_100ms_cnt == 4)
         {
@@ -276,9 +279,12 @@ int main(void)
       gSYS_ACT_flag &=0xfffffffb;
 	    if(master == 1)
 	    {
-		     master_status = 5;//master rx_done
+		    master_status = 5;//master rx_done
         gRXPARAM_rssi = SX1278_RSSI_LoRa(&SX1278);
         gRXPARAM_snr = SX1278_ESTSNR_LoRa(&SX1278);
+        gSYS_MST_rxcnt++;
+        if(gSYS_MST_errcnt < 1000)
+        {gSYS_MST_errcnt = gSYS_MST_txcnt - gSYS_MST_rxcnt;        }
         //show master rx
         #ifdef _EN_MST_SHOW_RAWBTE
           UR3TxBuf[0] = 0x10;
@@ -292,7 +298,16 @@ int main(void)
           UR3TxBuf[7] = 0x0a;
           SendUART3(8);HAL_Delay (5);
         #else
-          
+          TEMPBuf1[0] = gRXPARAM_rssi;//rssi
+          TEMPBuf1[1] = gRXPARAM_snr;//snr
+          //TEMPBuf1[2] = (unsigned char)((gSYS_MST_txcnt>>16)&0xff);
+          TEMPBuf1[2] = (unsigned char)((gSYS_MST_txcnt>>8)&0xff);
+          TEMPBuf1[3] = (unsigned char)((gSYS_MST_txcnt>>0)&0xff);
+          //TEMPBuf1[5] = (unsigned char)((gSYS_MST_errcnt>>16)&0xff);
+          TEMPBuf1[4] = (unsigned char)((gSYS_MST_errcnt>>8)&0xff);
+          TEMPBuf1[5] = (unsigned char)((gSYS_MST_errcnt>>0)&0xff);
+          reti = compose_rsptxt(&TEMPBuf1[0],&UR3TxBuf[0],6,1);
+          SendUART3(reti);HAL_Delay (5);
         #endif
         
          master_status = 3;//master rx_idle
@@ -337,7 +352,7 @@ int main(void)
             TEMPBuf1[2] = 0;
             TEMPBuf1[3] = SPI1TxBuf[7];
             TEMPBuf1[4] = gRXPARAM_errcnt;
-            reti = compose_rsptxt(&TEMPBuf1[0],&UR3TxBuf[0],5);
+            reti = compose_rsptxt(&TEMPBuf1[0],&UR3TxBuf[0],5,0);
             SendUART3(reti);HAL_Delay (5);
             #endif
           }
