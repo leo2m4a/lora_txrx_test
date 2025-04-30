@@ -1,0 +1,178 @@
+/*
+  WiFiAccessPoint.ino creates a WiFi access point and provides a web server on it.
+
+  Steps:
+  1. Connect to the access point "yourAp"
+  2. Point your web browser to http://192.168.4.1/H to turn the LED on or http://192.168.4.1/L to turn it off
+     OR
+     Run raw TCP "GET /H" and "GET /L" on PuTTY terminal with 192.168.4.1 as IP address and 80 as port
+
+  Created for arduino-esp32 on 04 July, 2018
+  by Elochukwu Ifediora (fedy0)
+*/
+/*
+ * There are three serial ports on the ESP known as U0UXD, U1UXD and U2UXD.
+ * 
+ * U0UXD is used to communicate with the ESP32 for programming and during reset/boot.
+ * U1UXD is unused and can be used for your projects. Some boards use this port for SPI Flash access though
+ * U2UXD is unused and can be used for your projects.
+ * 
+*/
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiAP.h>
+
+
+#define LED_BUILTIN 2   // Set the GPIO pin where you connected your test LED or comment this line out if your dev board has a built-in LED
+
+// Set these to your desired credentials.
+const char *ssid = "test";
+const char *password = "12345678";
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 3600;
+const int   daylightOffset_sec = 3600;
+
+WiFiServer server(80);
+
+hw_timer_t * timer = NULL;
+volatile SemaphoreHandle_t timerSemaphore;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
+volatile uint32_t isrCounter = 0;
+volatile uint32_t lastIsrAt = 0;
+
+String incomingStr; // for incoming serial2 String
+String printStr; // for Web Print String
+String titleStr = "========== LORA Received: ========== <br>";
+
+
+void IRAM_ATTR onTimer(){
+  // Increment the counter and set the time of ISR
+  portENTER_CRITICAL_ISR(&timerMux);
+  isrCounter++;
+  lastIsrAt = millis();
+  portEXIT_CRITICAL_ISR(&timerMux);
+  // Give a semaphore that we can check in the loop
+  xSemaphoreGiveFromISR(timerSemaphore, NULL);
+  // It is safe to use digitalRead/Write here if you want to toggle an output
+}
+
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  Serial.begin(115200);  // for system debugl
+  Serial2.begin(115200);
+  Serial.println();
+  Serial.println("Configuring access point...");
+  Serial2.println("ESP-32S communication(uart2) ready...");
+
+  // You can remove the password parameter if you want the AP to be open.
+  WiFi.softAP(ssid, password);
+  IPAddress myIP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(myIP);
+  server.begin();
+
+  Serial.println("Server started");
+  // Create semaphore to inform us when the timer has fired
+  timerSemaphore = xSemaphoreCreateBinary();
+
+  // Use 1st timer of 4 (counted from zero).
+  // Set 80 divider for prescaler (see ESP32 Technical Reference Manual for more
+  // info).
+  timer = timerBegin(0, 80, true);
+
+  // Attach onTimer function to our timer.
+  timerAttachInterrupt(timer, &onTimer, true);
+
+  // Set alarm to call onTimer function every second (value in microseconds).
+  // Repeat the alarm (third parameter)
+  timerAlarmWrite(timer, 1000000, true);
+
+  // Start an alarm
+  timerAlarmEnable(timer);
+}
+
+void loop() {
+  WiFiClient client = server.available();   // listen for incoming clients
+
+  if (client) {                             // if you get a client,
+    Serial.println("New Client.");           // print a message out the serial port
+    String currentLine = "";                // make a String to hold incoming data from the client
+    while (client.connected()) {            // loop while the client's connected
+      if (client.available()) {             // if there's bytes to read from the client,
+        char c = client.read();             // read a byte, then
+        Serial.write(c);                    // print it out the serial monitor
+        if (c == '\n') {                    // if the byte is a newline character
+
+          // if the current line is blank, you got two newline characters in a row.
+          // that's the end of the client HTTP request, so send a response:
+          if (currentLine.length() == 0) {
+            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
+            // and a content-type so the client knows what's coming, then a blank line:
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html");
+            client.println();
+            // Version
+            client.print("ESP-32S, UART2, baud rate 115200, pin p16(rxd) p17(txd)<br>");
+            client.print("Ver: 20250423<br>"); 
+            // the content of the HTTP response follows the header:
+            client.print("Click <a href=\"/H\">here</a> to Clear Message.<br>");
+            client.print("Click <a href=\"/L\">here</a> to Show Message.<br>");
+
+            // The HTTP response ends with another blank line:
+            client.println();
+            // break out of the while loop:
+            client.println(titleStr);
+            //client.println(incomingStr);
+            client.println(printStr);
+            break;
+          } else {    // if you got a newline, then clear currentLine:
+            currentLine = "";
+          }
+        } else if (c != '\r') {  // if you got anything else but a carriage return character,
+          currentLine += c;      // add it to the end of the currentLine
+        }
+
+        // Check to see if the client request was "GET /H" or "GET /L":
+        if (currentLine.endsWith("GET /H")) {
+          digitalWrite(LED_BUILTIN, HIGH);               // GET /H turns the LED on
+          titleStr = "=== Clear Done, Please Click Show Message. <br>";
+          printStr = "";
+        }
+        if (currentLine.endsWith("GET /L")) {
+          digitalWrite(LED_BUILTIN, LOW);                // GET /L turns the LED off
+          titleStr = "========== LORA Received: ========== <br>";
+        }
+      }
+    }
+    // close the connection:
+    client.stop();
+    Serial.println("Client Disconnected.");
+  }
+  // If Timer has fired
+  if (xSemaphoreTake(timerSemaphore, 0) == pdTRUE){
+    uint32_t isrCount = 0, isrTime = 0;
+    // Read the interrupt count and time
+    portENTER_CRITICAL(&timerMux);
+    isrCount = isrCounter;
+    isrTime = lastIsrAt;
+    portEXIT_CRITICAL(&timerMux);
+    // Print it
+    //Serial.print("onTimer no. ");
+    //Serial.print(isrCount);
+    //Serial.print(" at ");
+    //Serial.print(isrTime);
+    //Serial.println(" ms");
+  }
+  if (Serial2.available() > 0) {
+        // read the incoming byte:
+        incomingStr =  Serial2.readString();// read the incoming data as string
+
+        // say what you got:
+        Serial.print("Nodemcu received: ");
+        Serial.println(incomingStr);
+        printStr = printStr + incomingStr + "<br>"; 
+      }
+}
