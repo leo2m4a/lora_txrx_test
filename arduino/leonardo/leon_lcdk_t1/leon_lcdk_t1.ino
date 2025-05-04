@@ -15,9 +15,9 @@ String incomingStr; // for incoming serial2 String
 void setup() {
  lcd.begin(16, 2);
  lcd.setCursor(0,0);
- lcd.print("JMaker.com.tw");
+ lcd.print("MST");
  lcd.setCursor(0,1);
- lcd.print("Press Key:");
+ lcd.print("RSsn,TxcntERRcnt");
   Serial1.begin(115200);
   Serial1.println("UROK");
 }
