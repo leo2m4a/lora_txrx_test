@@ -32,7 +32,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+#define _FORCE_UR3_9600 1
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -125,7 +125,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-  master=1;
+  master=0;
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -352,7 +352,7 @@ int main(void)
             TEMPBuf1[2] = 0;
             TEMPBuf1[3] = SPI1TxBuf[7];
             TEMPBuf1[4] = gRXPARAM_errcnt;
-            reti = compose_rsptxt(&TEMPBuf1[0],&UR3TxBuf[0],5,0);
+            reti = compose_rsptxt(&TEMPBuf1[0],&UR3TxBuf[0],2,0);
             SendUART3(reti);HAL_Delay (5);
             #endif
           }
@@ -583,7 +583,11 @@ static void MX_USART3_UART_Init(void)
 
   /* USER CODE END USART3_Init 1 */
   huart3.Instance = USART3;
+  #ifndef _FORCE_UR3_9600
   huart3.Init.BaudRate = 115200;
+  #else
+  huart3.Init.BaudRate = 9600;
+  #endif
   huart3.Init.WordLength = UART_WORDLENGTH_8B;
   huart3.Init.StopBits = UART_STOPBITS_1;
   huart3.Init.Parity = UART_PARITY_NONE;
